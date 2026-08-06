@@ -1,0 +1,9 @@
+{
+  "name": "container-tracking-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live container tracking dashboard backed by Monday.com, deployed on Vercel.",
+  "engines": {
+    "node": ">=18"
+  }
+}
