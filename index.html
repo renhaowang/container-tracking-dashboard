@@ -809,11 +809,8 @@ function saveHistory(list) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
   } catch (e) {}
 }
-function clearHistoryStore() {
-  try {
-    localStorage.removeItem(HISTORY_KEY);
-  } catch (e) {}
-}
+/* No delete/clear function on purpose — trend history is treated as an
+   append-only record the user does not want to be able to lose by accident. */
 
 /* ============================ UI ============================ */
 
@@ -1813,10 +1810,21 @@ function DuplicatesTab({
 
 /* ---------------- Trends tab (weekly snapshot history) ---------------- */
 
+const dateKeyToISO = k => {
+  const y = Math.floor(k / 10000),
+    m = Math.floor(k % 10000 / 100),
+    d = k % 100;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+};
+const isoToDateKey = iso => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return y * 10000 + m * 100 + d;
+};
 function TrendsTab({
-  history,
-  onClear
+  history
 }) {
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   if (!history.length) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -1826,9 +1834,12 @@ function TrendsTab({
         color: MUT,
         fontSize: 14
       }
-    }, "No snapshots yet. Each time you upload the five exports, a data point is recorded here automatically.");
+    }, "No snapshots yet. A data point is recorded automatically every day the dashboard is opened.");
   }
-  const sorted = [...history].sort((a, b) => a.dateKey - b.dateKey);
+  const allSorted = [...history].sort((a, b) => a.dateKey - b.dateKey);
+  const minISO = dateKeyToISO(allSorted[0].dateKey);
+  const maxISO = dateKeyToISO(allSorted[allSorted.length - 1].dateKey);
+  const sorted = allSorted.filter(s => (!from || s.dateKey >= isoToDateKey(from)) && (!to || s.dateKey <= isoToDateKey(to)));
   const kpiChartData = sorted.map(s => ({
     date: s.date,
     Total: s.total,
@@ -1860,7 +1871,7 @@ function TrendsTab({
       padding: "10px 14px",
       display: "flex",
       flexWrap: "wrap",
-      gap: 8,
+      gap: 10,
       alignItems: "center",
       justifyContent: "space-between"
     }
@@ -1869,12 +1880,59 @@ function TrendsTab({
       fontSize: 12.5,
       color: MUT
     }
-  }, history.length, " snapshot", history.length === 1 ? "" : "s", " recorded \u2014 a new one is saved automatically each time you upload the five exports."), /*#__PURE__*/React.createElement(Chip, {
-    label: "Clear history",
-    color: RED,
-    active: false,
-    onClick: onClear
-  })), /*#__PURE__*/React.createElement("div", {
+  }, history.length, " snapshot", history.length === 1 ? "" : "s", " recorded \u2014 a new one is saved automatically every day the dashboard is opened. Nothing here can be deleted."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: MUT,
+      textTransform: "uppercase",
+      letterSpacing: .4
+    }
+  }, "Range"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: from,
+    min: minISO,
+    max: to || maxISO,
+    onChange: e => setFrom(e.target.value),
+    style: {
+      fontSize: 12.5,
+      border: `1.5px solid ${LINE}`,
+      borderRadius: 6,
+      padding: "4px 8px",
+      fontFamily: "Calibri, 'Segoe UI', sans-serif"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: MUT,
+      fontSize: 12.5
+    }
+  }, "to"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: to,
+    min: from || minISO,
+    max: maxISO,
+    onChange: e => setTo(e.target.value),
+    style: {
+      fontSize: 12.5,
+      border: `1.5px solid ${LINE}`,
+      borderRadius: 6,
+      padding: "4px 8px",
+      fontFamily: "Calibri, 'Segoe UI', sans-serif"
+    }
+  }), from || to ? /*#__PURE__*/React.createElement(Chip, {
+    label: "Reset range",
+    onClick: () => {
+      setFrom("");
+      setTo("");
+    }
+  }) : null)), /*#__PURE__*/React.createElement("div", {
     style: {
       ...card,
       padding: 14
@@ -2040,7 +2098,15 @@ function TrendsTab({
     style: td
   }, s.passedRail), /*#__PURE__*/React.createElement("td", {
     style: td
-  }, s.demurrage))))))));
+  }, s.demurrage))), sorted.length === 0 ? /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    colSpan: 5,
+    style: {
+      ...td,
+      textAlign: "center",
+      padding: 24,
+      color: MUT
+    }
+  }, "No snapshots in the selected date range.")) : null)))));
 }
 
 /* ---------------- Warehouse tab (per-group daily report, was "Dallas") ---------------- */
@@ -2331,10 +2397,6 @@ function App() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const clearHistory = () => {
-    clearHistoryStore();
-    setHistory([]);
-  };
   const tabBtn = (id, label) => /*#__PURE__*/React.createElement("button", {
     onClick: () => setTab(id),
     style: {
@@ -2463,8 +2525,7 @@ function App() {
       color: MUT
     }
   }, "Loading\u2026") : tab === "trends" ? /*#__PURE__*/React.createElement(TrendsTab, {
-    history: history,
-    onClear: clearHistory
+    history: history
   }) : !data ? /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 40,
