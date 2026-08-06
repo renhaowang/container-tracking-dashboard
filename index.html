@@ -616,19 +616,33 @@ function buildRow(boardId, rec) {
   return row;
 }
 
-/* Dallas daily summary — port of generate_report.py rules */
-const DALLAS_LABEL = "DALLAS, TX -SKYLINE";
+/* North American CTN warehouse-group daily summary — port of generate_report.py
+   rules, generalized from a single fixed "Dallas" group to any group on the
+   board. RECEIVED_LABEL rows get appended back into whichever group they
+   actually belong to via GROUP_WAREHOUSE_MAP (the WAREHOUSE column's label for
+   that location doesn't always match the group's display name verbatim). */
 const RECEIVED_LABEL = "Received-2026";
+const DEFAULT_NACTN_GROUP = "DALLAS, TX -SKYLINE";
+const GROUP_WAREHOUSE_MAP = {
+  "DALLAS, TX -SKYLINE": "DALLAS,TX",
+  "ORLANDO-MILESTONE": "ORLANDO, FL",
+  "HOUSTON, TX -ARTISAN": "HOUSTON,TX",
+  "PHOENIX, AZ-OASIS": "OASIS,AZ",
+  "Greensboro, NC -SPRING FOREST": "GREENSBORO,NC",
+  "SACRAMENTO, CA-WOODLAND": "SACRAMENTO, CA-WOODLAND",
+  "ORLANDO, FL-Fort Myers": "ORLANDO, FL-Fort Myers"
+};
 const DALLAS_EXCLUDE = new Set(["", "booked", "booking", "ship status"]);
 const STATUS_TXT = "Communicating with trucking company on updated ETA";
 const OPEN_STATUS = "Rail Schedule Pending & Discharged"; /* mapping still unconfirmed */
 
-function buildDallas(nactnRecs) {
-  const groups = [...new Set(nactnRecs.map(r => r.group))];
-  const dallasRecs = nactnRecs.filter(r => r.group === DALLAS_LABEL);
-  const appended = nactnRecs.filter(r => r.group === RECEIVED_LABEL && String(r.sub["Ship Status"] || "").trim() === "Delivered" && blank(r.sub["EMPTY RTN DATE"]) && String(r.sub["WAREHOUSE"] || "").trim() === "DALLAS,TX");
+function buildNactnGroupReport(nactnRecs, groupLabel) {
+  const groups = [...new Set(nactnRecs.map(r => r.group))].filter(g => g != null).sort();
+  const groupRecs = nactnRecs.filter(r => r.group === groupLabel);
+  const warehouse = GROUP_WAREHOUSE_MAP[groupLabel];
+  const appended = warehouse ? nactnRecs.filter(r => r.group === RECEIVED_LABEL && String(r.sub["Ship Status"] || "").trim() === "Delivered" && blank(r.sub["EMPTY RTN DATE"]) && String(r.sub["WAREHOUSE"] || "").trim() === warehouse) : [];
   const records = [];
-  for (const rec of [...dallasRecs, ...appended]) {
+  for (const rec of [...groupRecs, ...appended]) {
     const ship = String(rec.sub["Ship Status"] || "").trim();
     if (DALLAS_EXCLUDE.has(ship.toLowerCase())) continue;
     const lfd = normDate(rec.sub["LFD"]);
@@ -647,7 +661,7 @@ function buildDallas(nactnRecs) {
   const far = new Date(2999, 0, 1);
   records.sort((a, b) => rank(a.status) - rank(b.status) || String(a.status).localeCompare(String(b.status)) || (isDate(a.railEta) ? a.railEta : far) - (isDate(b.railEta) ? b.railEta : far));
   return {
-    found: dallasRecs.length > 0 || groups.includes(DALLAS_LABEL),
+    found: groupRecs.length > 0 || groups.includes(groupLabel),
     groups,
     records,
     appendedCount: appended.length,
@@ -658,7 +672,7 @@ function buildDallas(nactnRecs) {
 /* Live data source: fetch already-shaped {group,item,sub} records per board
    from the serverless Monday.com proxy (api/monday-data.js). Everything past
    this point is unchanged from the original Excel-upload pipeline — buildRow,
-   duplicate detection, and buildDallas don't care where a record came from. */
+   duplicate detection, and buildNactnGroupReport don't care where a record came from. */
 async function loadLive() {
   let res;
   try {
@@ -712,14 +726,14 @@ async function loadLive() {
     occ: byNorm[k]
   }));
   const missing = BOARD_LIST.filter(b => !matched[b.id]).map(b => b.name);
-  const dallas = matched.NACTN ? buildDallas(matched.NACTN.records) : null;
+  const nactnRecords = matched.NACTN ? matched.NACTN.records : null;
   return {
     loadedAt: new Date().toISOString(),
     files,
     missing,
     rows,
     duplicates,
-    dallas
+    nactnRecords
   };
 }
 
@@ -732,7 +746,6 @@ const reviveDates = payload => {
     for (const k of keys) if (typeof obj[k] === "string" && iso.test(obj[k])) obj[k] = new Date(obj[k]);
   };
   (payload.rows || []).forEach(r => rev(r, DATE_KEYS));
-  if (payload.dallas) (payload.dallas.records || []).forEach(r => rev(r, ["railEta", "lfd", "deliverDate", "emptyReturnLfd"]));
   return payload;
 };
 function saveData(payload) {
@@ -879,6 +892,93 @@ function Chip({
       color: active ? "#fff" : INK
     }
   }, label);
+}
+function GroupDropdown({
+  groups,
+  selected,
+  onToggle,
+  onClear
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDocClick = e => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+  return /*#__PURE__*/React.createElement("div", {
+    ref: ref,
+    style: {
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setOpen(o => !o),
+    style: {
+      padding: "4px 11px",
+      borderRadius: 999,
+      fontSize: 12.5,
+      cursor: "pointer",
+      fontFamily: "Calibri, 'Segoe UI', sans-serif",
+      fontWeight: selected.length ? 700 : 400,
+      border: `1.5px solid ${selected.length ? NAVY : LINE}`,
+      background: selected.length ? NAVY : "#fff",
+      color: selected.length ? "#fff" : INK
+    }
+  }, "Group", selected.length ? ` (${selected.length})` : "", " \u25BE"), open ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: "calc(100% + 4px)",
+      left: 0,
+      zIndex: 20,
+      minWidth: 260,
+      maxHeight: 300,
+      overflowY: "auto",
+      background: "#fff",
+      border: `1px solid ${LINE}`,
+      borderRadius: 8,
+      boxShadow: "0 6px 18px rgba(31,56,100,.18)",
+      padding: 8
+    }
+  }, selected.length ? /*#__PURE__*/React.createElement("button", {
+    onClick: onClear,
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      color: RED,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "4px 6px",
+      marginBottom: 4,
+      fontFamily: "Calibri, 'Segoe UI', sans-serif"
+    }
+  }, "Clear groups") : null, groups.map(g => /*#__PURE__*/React.createElement("label", {
+    key: g,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7,
+      padding: "4px 6px",
+      fontSize: 12.5,
+      cursor: "pointer",
+      borderRadius: 5,
+      fontFamily: "Calibri, 'Segoe UI', sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: selected.includes(g),
+    onChange: () => onToggle(g)
+  }), /*#__PURE__*/React.createElement("span", null, g))), groups.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: MUT,
+      padding: "4px 6px"
+    }
+  }, "No groups loaded.") : null) : null);
 }
 function Kpi({
   label,
@@ -1210,20 +1310,12 @@ function OverviewTab({
       background: LINE,
       margin: "0 4px"
     }
+  }), /*#__PURE__*/React.createElement(GroupDropdown, {
+    groups: groups,
+    selected: groupsF,
+    onToggle: g => setGroupsF(p => p.includes(g) ? p.filter(x => x !== g) : [...p, g]),
+    onClear: () => setGroupsF([])
   }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11.5,
-      fontWeight: 700,
-      color: MUT,
-      textTransform: "uppercase",
-      letterSpacing: .4
-    }
-  }, "Group"), groups.map(g => /*#__PURE__*/React.createElement(Chip, {
-    key: g,
-    label: g,
-    active: groupsF.includes(g),
-    onClick: () => setGroupsF(p => p.includes(g) ? p.filter(x => x !== g) : [...p, g])
-  })), /*#__PURE__*/React.createElement("span", {
     style: {
       width: 1,
       height: 22,
@@ -1951,14 +2043,19 @@ function TrendsTab({
   }, s.demurrage))))))));
 }
 
-/* ---------------- Dallas tab (daily report replica) ---------------- */
+/* ---------------- Warehouse tab (per-group daily report, was "Dallas") ---------------- */
 
-function DallasTab({
-  data,
+function WarehouseTab({
+  nactnRecords,
   today
 }) {
-  const dallas = data.dallas;
-  if (!dallas) return /*#__PURE__*/React.createElement("div", {
+  const allGroups = useMemo(() => nactnRecords ? [...new Set(nactnRecords.map(r => r.group))].filter(g => g != null).sort() : [], [nactnRecords]);
+  const [group, setGroup] = useState(DEFAULT_NACTN_GROUP);
+  useEffect(() => {
+    if (allGroups.length && !allGroups.includes(group)) setGroup(allGroups.includes(DEFAULT_NACTN_GROUP) ? DEFAULT_NACTN_GROUP : allGroups[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allGroups]);
+  if (!nactnRecords) return /*#__PURE__*/React.createElement("div", {
     style: {
       ...card,
       padding: 28,
@@ -1966,11 +2063,12 @@ function DallasTab({
       color: MUT,
       fontSize: 14
     }
-  }, "The Dallas view needs the ", /*#__PURE__*/React.createElement("b", null, "NORTH AMERICAN-CTN"), " board, which didn't come back from the last live fetch.");
+  }, "This view needs the ", /*#__PURE__*/React.createElement("b", null, "NORTH AMERICAN-CTN"), " board, which didn't come back from the last live fetch.");
+  const report = buildNactnGroupReport(nactnRecords, group);
   const todayK = dkey(today),
     tomorrowK = dkey(addDays(today, 1));
-  const recs = dallas.records;
-  const redRows = recs.filter(r => isDate(r.railEta) && dkey(r.railEta) === tomorrowK);
+  const recs = report.records;
+  const tomorrowRows = recs.filter(r => isDate(r.railEta) && dkey(r.railEta) === tomorrowK);
   const passed = recs.filter(r => isDate(r.railEta) && dkey(r.railEta) < todayK && r.status !== "Delivered" && !isDate(r.deliverDate));
   const counts = {};
   recs.forEach(r => {
@@ -2002,7 +2100,40 @@ function DallasTab({
       flexDirection: "column",
       gap: 14
     }
-  }, dallas.openStatusPresent ? /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...card,
+      padding: "10px 14px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "Cambria, Georgia, serif",
+      fontWeight: 700,
+      color: NAVY,
+      fontSize: 16
+    }
+  }, "Warehouse group"), /*#__PURE__*/React.createElement("select", {
+    value: group,
+    onChange: e => setGroup(e.target.value),
+    style: {
+      fontSize: 13,
+      border: `1.5px solid ${LINE}`,
+      borderRadius: 7,
+      padding: "6px 11px",
+      color: INK,
+      background: "#fff",
+      fontFamily: "Calibri, 'Segoe UI', sans-serif",
+      minWidth: 220
+    }
+  }, allGroups.map(g => /*#__PURE__*/React.createElement("option", {
+    key: g,
+    value: g
+  }, g)))), report.openStatusPresent ? /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff7df",
       border: `1.5px solid ${AMBER}`,
@@ -2027,7 +2158,7 @@ function DallasTab({
   }, /*#__PURE__*/React.createElement(Kpi, {
     label: "Summary records",
     value: recs.length,
-    sub: `${dallas.appendedCount} appended from Received-2026`,
+    sub: `${report.appendedCount} appended from Received-2026`,
     tone: "navy",
     onClick: () => {}
   }), /*#__PURE__*/React.createElement(Kpi, {
@@ -2042,8 +2173,8 @@ function DallasTab({
     onClick: () => {}
   }), /*#__PURE__*/React.createElement(Kpi, {
     label: "Rail ETA tomorrow",
-    value: redRows.length,
-    sub: redRows.length ? redRows.map(r => r.name).join(", ") : fmtD(addDays(today, 1)),
+    value: tomorrowRows.length,
+    sub: tomorrowRows.length ? tomorrowRows.map(r => r.name).join(", ") : fmtD(addDays(today, 1)),
     tone: "red",
     onClick: () => {}
   }), /*#__PURE__*/React.createElement(Kpi, {
@@ -2066,7 +2197,7 @@ function DallasTab({
       fontWeight: 700,
       fontSize: 15
     }
-  }, "Incoming CNTR_ Dallas \u2014 ", fmtD(today), /*#__PURE__*/React.createElement("span", {
+  }, "Incoming CNTR_ ", group, " \u2014 ", fmtD(today), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "Calibri, 'Segoe UI', sans-serif",
       fontWeight: 400,
@@ -2074,7 +2205,7 @@ function DallasTab({
       opacity: .8,
       marginLeft: 10
     }
-  }, "Red rows: Rail ETA = tomorrow \xB7 sorted Delivered \u2192 A/N \u2192 other statuses, oldest Rail ETA first")), /*#__PURE__*/React.createElement("div", {
+  }, "Yellow highlight: Rail ETA = tomorrow \xB7 sorted Delivered \u2192 A/N \u2192 other statuses, oldest Rail ETA first")), /*#__PURE__*/React.createElement("div", {
     style: {
       overflowX: "auto",
       maxHeight: 560,
@@ -2089,10 +2220,10 @@ function DallasTab({
     key: h,
     style: hd
   }, h)))), /*#__PURE__*/React.createElement("tbody", null, recs.map((r, i) => {
-    const red = isDate(r.railEta) && dkey(r.railEta) === tomorrowK;
-    const rf = {
-      background: REDFILL,
-      color: "#fff",
+    const tomorrow = isDate(r.railEta) && dkey(r.railEta) === tomorrowK;
+    const hl = {
+      background: AMBER,
+      color: NAVY,
       fontWeight: 700
     };
     return /*#__PURE__*/React.createElement("tr", {
@@ -2112,24 +2243,23 @@ function DallasTab({
       style: {
         ...bd,
         fontWeight: 700,
-        ...(red ? rf : {})
+        ...(tomorrow ? hl : {})
       }
     }, r.name), /*#__PURE__*/React.createElement("td", {
       style: {
         ...bd,
-        ...(red ? rf : {})
+        ...(tomorrow ? hl : {})
       }
     }, r.pu == null ? "" : String(r.pu)), /*#__PURE__*/React.createElement("td", {
       style: {
         ...bd,
         textAlign: "center",
-        ...(red ? rf : {})
+        ...(tomorrow ? hl : {})
       }
     }, fmtD(r.railEta)), /*#__PURE__*/React.createElement("td", {
       style: {
         ...bd,
-        textAlign: "center",
-        ...(red ? rf : {})
+        textAlign: "center"
       }
     }, fmtD(r.lfd)), /*#__PURE__*/React.createElement("td", {
       style: {
@@ -2154,7 +2284,7 @@ function DallasTab({
       padding: 26,
       color: MUT
     }
-  }, "No Dallas summary records in this export.", !dallas.found ? " (DALLAS, TX -SKYLINE section not found — sections present: " + dallas.groups.join(", ") + ")" : "")) : null)))));
+  }, "No summary records for this group.", !report.found ? " (\"" + group + "\" section not found — sections present: " + report.groups.join(", ") + ")" : "")) : null)))));
 }
 
 /* ---------------- App ---------------- */
@@ -2286,7 +2416,7 @@ function App() {
     style: {
       marginTop: 8
     }
-  }, tabBtn("overview", "Overview"), tabBtn("dallas", "Dallas"), tabBtn("trends", "Trends"), tabBtn("duplicates", "Duplicates"))), /*#__PURE__*/React.createElement("div", {
+  }, tabBtn("overview", "Overview"), tabBtn("warehouse", "Warehouse"), tabBtn("trends", "Trends"), tabBtn("duplicates", "Duplicates"))), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "16px 22px 40px 22px",
       maxWidth: 1500,
@@ -2344,8 +2474,8 @@ function App() {
   }, busy ? "Loading live data from Monday.com…" : err ? "Live data isn't available right now." : "Waiting for live data…") : tab === "overview" ? /*#__PURE__*/React.createElement(OverviewTab, {
     data: data,
     today: today
-  }) : tab === "dallas" ? /*#__PURE__*/React.createElement(DallasTab, {
-    data: data,
+  }) : tab === "warehouse" ? /*#__PURE__*/React.createElement(WarehouseTab, {
+    nactnRecords: data.nactnRecords,
     today: today
   }) : /*#__PURE__*/React.createElement(DuplicatesTab, {
     data: data
