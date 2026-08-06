@@ -33,31 +33,21 @@ async function mondayFetch(token, query, variables) {
   return json.data;
 }
 
+/* ColumnValue has no direct "title" field — title lives on the nested
+   Column object it belongs to (confirmed against the live schema).
+   items_page itself accepts an optional cursor, so one query template
+   covers every page (confirmed against the live schema). */
 const ITEMS_PAGE_QUERY = `
-  query($boardId: [ID!], $limit: Int!) {
+  query($boardId: [ID!], $limit: Int!, $cursor: String) {
     boards(ids: $boardId) {
-      items_page(limit: $limit) {
+      items_page(limit: $limit, cursor: $cursor) {
         cursor
         items {
           name
           group { title }
-          column_values { title text }
-          subitems { name column_values { title text } }
+          column_values { column { title } text }
+          subitems { name column_values { column { title } text } }
         }
-      }
-    }
-  }
-`;
-
-const NEXT_PAGE_QUERY = `
-  query($cursor: String!, $limit: Int!) {
-    next_items_page(limit: $limit, cursor: $cursor) {
-      cursor
-      items {
-        name
-        group { title }
-        column_values { title text }
-        subitems { name column_values { title text } }
       }
     }
   }
@@ -66,7 +56,8 @@ const NEXT_PAGE_QUERY = `
 function colValuesToObject(item) {
   const obj = { Name: item.name };
   for (const cv of item.column_values || []) {
-    if (cv.title && !(cv.title in obj)) obj[cv.title] = cv.text;
+    const title = cv.column && cv.column.title;
+    if (title && !(title in obj)) obj[title] = cv.text;
   }
   return obj;
 }
@@ -86,16 +77,15 @@ function itemsToRecords(items) {
 }
 
 async function fetchBoard(token, boardId) {
-  const first = await mondayFetch(token, ITEMS_PAGE_QUERY, { boardId: [String(boardId)], limit: PAGE_SIZE });
-  const board = first.boards && first.boards[0];
-  if (!board) return [];
-  let records = itemsToRecords(board.items_page.items);
-  let cursor = board.items_page.cursor;
-  while (cursor) {
-    const next = await mondayFetch(token, NEXT_PAGE_QUERY, { cursor, limit: PAGE_SIZE });
-    records = records.concat(itemsToRecords(next.next_items_page.items));
-    cursor = next.next_items_page.cursor;
-  }
+  let records = [];
+  let cursor = null;
+  do {
+    const data = await mondayFetch(token, ITEMS_PAGE_QUERY, { boardId: [String(boardId)], limit: PAGE_SIZE, cursor });
+    const board = data.boards && data.boards[0];
+    if (!board) break;
+    records = records.concat(itemsToRecords(board.items_page.items));
+    cursor = board.items_page.cursor;
+  } while (cursor);
   return records;
 }
 
