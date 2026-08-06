@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/monday-data.js": {
+      "maxDuration": 60
+    }
+  }
+}
