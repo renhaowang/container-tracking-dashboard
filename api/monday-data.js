@@ -76,7 +76,13 @@ async function mondayFetch(token, query, variables) {
   const json = await res.json();
   if (!res.ok || json.errors) {
     const msg = (json.errors && json.errors.map(e => e.message).join("; ")) || ("HTTP " + res.status);
-    throw new Error("Monday.com API error: " + msg);
+    const err = new Error("Monday.com API error: " + msg);
+    const budgetErr = json.errors && json.errors.find(e => e.extensions && e.extensions.code === "COMPLEXITY_BUDGET_EXHAUSTED");
+    if (budgetErr) {
+      err.complexityBudgetExhausted = true;
+      err.retryInSeconds = budgetErr.extensions.retry_in_seconds;
+    }
+    throw err;
   }
   return json.data;
 }
@@ -140,12 +146,26 @@ async function fetchBoard(token, board) {
   return records;
 }
 
-module.exports = async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+/* Short-lived cache across warm invocations. Doesn't change the "live"
+   promise in practice (data is at most CACHE_TTL_MS old) but means back-to-
+   back page loads — repeated refreshes, several people opening the link
+   close together — reuse one fetch instead of each re-querying Monday,
+   which is the main lever against tripping the complexity budget. */
+const CACHE_TTL_MS = 60 * 1000;
+let cache = null; /* { at, out } */
 
+module.exports = async (req, res) => {
   const token = process.env.MONDAY_API_TOKEN;
   if (!token) {
+    res.setHeader("Cache-Control", "no-store");
     res.status(500).json({ error: "Server is missing MONDAY_API_TOKEN — set it in the Vercel project's Environment Variables." });
+    return;
+  }
+
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Data-Cache", "hit");
+    res.status(200).json(cache.out);
     return;
   }
 
@@ -156,21 +176,30 @@ module.exports = async (req, res) => {
 
   const out = {};
   const errors = [];
+  let retryInSeconds = null;
   results.forEach((r, i) => {
     const key = boardKeys[i];
     if (r.status === "fulfilled") {
       out[key] = { fname: BOARDS[key].name, records: r.value };
     } else {
       errors.push(key + ": " + (r.reason && r.reason.message ? r.reason.message : String(r.reason)));
+      if (r.reason && r.reason.complexityBudgetExhausted) {
+        retryInSeconds = Math.max(retryInSeconds || 0, r.reason.retryInSeconds || 30);
+      }
     }
   });
 
   if (errors.length) console.error("monday-data partial failure:", errors.join(" | "));
 
+  res.setHeader("Cache-Control", "no-store");
+
   if (Object.keys(out).length === 0) {
-    res.status(502).json({ error: "Could not load any board from Monday.com. " + errors.join(" | ") });
+    const payload = { error: "Could not load any board from Monday.com. " + errors.join(" | ") };
+    if (retryInSeconds != null) payload.retryInSeconds = retryInSeconds;
+    res.status(502).json(payload);
     return;
   }
 
+  cache = { at: Date.now(), out };
   res.status(200).json(out);
 };
