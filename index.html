@@ -634,8 +634,6 @@ const GROUP_WAREHOUSE_MAP = {
 };
 const DALLAS_EXCLUDE = new Set(["", "booked", "booking", "ship status"]);
 const STATUS_TXT = "Communicating with trucking company on updated ETA";
-const OPEN_STATUS = "Rail Schedule Pending & Discharged"; /* mapping still unconfirmed */
-
 function buildNactnGroupReport(nactnRecs, groupLabel) {
   const groups = [...new Set(nactnRecs.map(r => r.group))].filter(g => g != null).sort();
   const groupRecs = nactnRecs.filter(r => r.group === groupLabel);
@@ -654,7 +652,7 @@ function buildNactnGroupReport(nactnRecs, groupLabel) {
       lfd,
       deliverDate: normDate(rec.sub["Deliver Date"]),
       emptyReturnLfd: isDate(lfd) ? addDays(lfd, 10) : null,
-      statusTxt: ship === "RAIL" || ship === "Rail Schedule & Discharged" ? STATUS_TXT : ""
+      statusTxt: ship === "RAIL" || ship === "Rail Schedule Pending & Discharged" ? STATUS_TXT : ""
     });
   }
   const rank = s => s === "Delivered" ? 0 : s === "A/N" ? 1 : 2;
@@ -664,8 +662,7 @@ function buildNactnGroupReport(nactnRecs, groupLabel) {
     found: groupRecs.length > 0 || groups.includes(groupLabel),
     groups,
     records,
-    appendedCount: appended.length,
-    openStatusPresent: records.some(r => r.status === OPEN_STATUS)
+    appendedCount: appended.length
   };
 }
 
@@ -2202,15 +2199,7 @@ function WarehouseTab({
   }, allGroups.map(g => /*#__PURE__*/React.createElement("option", {
     key: g,
     value: g
-  }, g)))), report.openStatusPresent ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#fff7df",
-      border: `1.5px solid ${AMBER}`,
-      borderRadius: 8,
-      padding: "10px 14px",
-      fontSize: 13
-    }
-  }, /*#__PURE__*/React.createElement("b", null, "Standing item:"), " the status \u201C", OPEN_STATUS, "\u201D appears in today\u2019s data. Its Status-column wording is still unconfirmed \u2014 the Status cell is left blank for those rows until you provide it.") : null, passed.length ? /*#__PURE__*/React.createElement("div", {
+  }, g)))), passed.length ? /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fdecec",
       border: `1.5px solid ${RED}`,
