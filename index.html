@@ -871,6 +871,30 @@ function saveHistory(list) {
 /* No delete/clear function on purpose — trend history is treated as an
    append-only record the user does not want to be able to lose by accident. */
 
+/* Shared history: a GitHub Action fetches live data once a day (regardless of
+   whether anyone opens the dashboard) and commits data/history.json, which
+   Vercel serves as a static file. This fills the gaps in each browser's own
+   localStorage history (e.g. days nobody opened the dashboard) without ever
+   touching or replacing the local append-only copy. */
+async function loadServerHistory() {
+  try {
+    const res = await fetch("/data/history.json", {
+      cache: "no-store"
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    return [];
+  }
+}
+function mergeHistory(local, server) {
+  const map = new Map();
+  for (const s of local) map.set(s.dateKey, s);
+  for (const s of server) map.set(s.dateKey, s); /* shared snapshot wins on same-day conflicts */
+  return [...map.values()].sort((a, b) => a.dateKey - b.dateKey);
+}
+
 /* ============================ UI ============================ */
 
 const STATUS_COLORS = {
@@ -2039,7 +2063,7 @@ function TrendsTab({
       fontSize: 12.5,
       color: MUT
     }
-  }, history.length, " snapshot", history.length === 1 ? "" : "s", " recorded \u2014 a new one is saved automatically every day the dashboard is opened. Nothing here can be deleted."), /*#__PURE__*/React.createElement("div", {
+  }, history.length, " snapshot", history.length === 1 ? "" : "s", " recorded \u2014 one is saved automatically every day in the background, plus whenever the dashboard is opened. Nothing here can be deleted."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -2566,10 +2590,12 @@ function App() {
   const [err, setErr] = useState(null);
   const [retrySeconds, setRetrySeconds] = useState(null);
   const [history, setHistory] = useState([]);
+  const [serverHistory, setServerHistory] = useState([]);
   const today = useMemo(() => {
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), n.getDate());
   }, []);
+  const mergedHistory = useMemo(() => mergeHistory(history, serverHistory), [history, serverHistory]);
   const refresh = useCallback(async () => {
     setBusy(true);
     setErr(null);
@@ -2611,6 +2637,7 @@ function App() {
     const d = loadData();
     if (d) setData(d);
     setHistory(loadHistory());
+    loadServerHistory().then(setServerHistory);
     setReady(true);
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2748,7 +2775,7 @@ function App() {
       color: MUT
     }
   }, "Loading\u2026") : tab === "trends" ? /*#__PURE__*/React.createElement(TrendsTab, {
-    history: history
+    history: mergedHistory
   }) : !data ? /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 40,
