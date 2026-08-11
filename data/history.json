@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "date": "8/11/2026",
+    "dateKey": 20260811,
+    "loadedAt": "2026-08-11T14:12:27.598Z",
+    "total": 301,
+    "delivered": 20,
+    "passedRail": 7,
+    "demurrage": 0,
+    "statusCounts": {
+      "Delivery Scheduled": 1,
+      "Delivered": 22,
+      "Rail": 3,
+      "Booked": 48,
+      "On Water": 100,
+      "B/L Release": 1,
+      "Quote": 4,
+      "A/N": 50,
+      "Booking": 25,
+      "Arrived at port": 11,
+      "Delivery Schedule": 11,
+      "(blank)": 1,
+      "In-Production": 1,
+      "Rail Schedule Pending & Discharged": 9,
+      "Pending Telex": 1,
+      "Pending Booking Info & Hold Booking": 1,
+      "Quotation": 12
+    }
+  }
+]
