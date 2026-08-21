@@ -661,10 +661,12 @@ function buildNactnGroupReport(nactnRecs, groupLabel) {
     const ship = String(rec.sub["Ship Status"] || "").trim();
     if (DALLAS_EXCLUDE.has(ship.toLowerCase())) continue;
     const lfd = normDate(rec.sub["LFD"]);
+    const pu = rec.sub["PU#"] == null ? null : rec.sub["PU#"];
     records.push({
       status: ship,
       name: rec.sub["Name"] == null ? null : String(rec.sub["Name"]).trim(),
-      pu: rec.sub["PU#"] == null ? null : rec.sub["PU#"],
+      pu,
+      hasPU: pu != null && String(pu).trim() !== "",
       railEta: normDate(rec.sub["Rail ETA"]),
       lfd,
       deliverDate: normDate(rec.sub["Deliver Date"]),
@@ -672,9 +674,12 @@ function buildNactnGroupReport(nactnRecs, groupLabel) {
       statusTxt: ship === "RAIL" || ship === "Rail Schedule Pending & Discharged" ? STATUS_TXT : ""
     });
   }
-  const rank = s => s === "Delivered" ? 0 : s === "A/N" ? 1 : 2;
+  /* Delivered first, then anything with a PU# assigned (pulled/scheduled but
+     not yet delivered), then everything else — status text, then oldest
+     Rail ETA first, within each tier. */
+  const rank = r => r.status === "Delivered" ? 0 : r.hasPU ? 1 : 2;
   const far = new Date(2999, 0, 1);
-  records.sort((a, b) => rank(a.status) - rank(b.status) || String(a.status).localeCompare(String(b.status)) || (isDate(a.railEta) ? a.railEta : far) - (isDate(b.railEta) ? b.railEta : far));
+  records.sort((a, b) => rank(a) - rank(b) || String(a.status).localeCompare(String(b.status)) || (isDate(a.railEta) ? a.railEta : far) - (isDate(b.railEta) ? b.railEta : far));
   return {
     found: groupRecs.length > 0 || groups.includes(groupLabel),
     groups,
@@ -714,6 +719,7 @@ function buildNactnSearchResults(nactnRecs, query) {
       status: ship,
       name: name || null,
       pu: puRaw == null ? null : puRaw,
+      hasPU: puRaw != null && String(puRaw).trim() !== "",
       railEta: normDate(rec.sub["Rail ETA"]),
       lfd,
       deliverDate: normDate(rec.sub["Deliver Date"]),
@@ -2493,7 +2499,7 @@ function WarehouseTab({
       fontSize: 11.5,
       opacity: .8
     }
-  }, searchResults ? "Matches across every warehouse group" : "Yellow highlight: Rail ETA = tomorrow · sorted Delivered → A/N → other statuses, oldest Rail ETA first")), /*#__PURE__*/React.createElement("div", {
+  }, searchResults ? "Matches across every warehouse group" : "Yellow highlight: Rail ETA is tomorrow, or PU# assigned but not yet delivered · sorted Delivered → PU# assigned → everything else, oldest Rail ETA first")), /*#__PURE__*/React.createElement("div", {
     style: {
       overflowX: "auto",
       maxHeight: 560,
@@ -2509,6 +2515,8 @@ function WarehouseTab({
     style: hd
   }, h)))), /*#__PURE__*/React.createElement("tbody", null, tableRecs.map((r, i) => {
     const tomorrow = isDate(r.railEta) && dkey(r.railEta) === tomorrowK;
+    const puPending = r.hasPU && r.status !== "Delivered";
+    const flagged = tomorrow || puPending;
     const hl = {
       background: AMBER,
       color: NAVY,
@@ -2525,7 +2533,7 @@ function WarehouseTab({
       style: {
         ...bd,
         fontWeight: 700,
-        ...(tomorrow ? hl : {})
+        ...(flagged ? hl : {})
       }
     }, r.name), /*#__PURE__*/React.createElement("td", {
       style: bd
@@ -2541,13 +2549,13 @@ function WarehouseTab({
     }, r.status)), /*#__PURE__*/React.createElement("td", {
       style: {
         ...bd,
-        ...(tomorrow ? hl : {})
+        ...(flagged ? hl : {})
       }
     }, r.pu == null ? "" : String(r.pu)), /*#__PURE__*/React.createElement("td", {
       style: {
         ...bd,
         textAlign: "center",
-        ...(tomorrow ? hl : {})
+        ...(flagged ? hl : {})
       }
     }, fmtD(r.railEta)), /*#__PURE__*/React.createElement("td", {
       style: {
