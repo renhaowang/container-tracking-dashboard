@@ -674,12 +674,12 @@ function buildNactnGroupReport(nactnRecs, groupLabel) {
       statusTxt: ship === "RAIL" || ship === "Rail Schedule Pending & Discharged" ? STATUS_TXT : ""
     });
   }
-  /* Delivered first, then anything with a PU# assigned (pulled/scheduled but
-     not yet delivered), then everything else — status text, then oldest
-     Rail ETA first, within each tier. */
-  const rank = r => r.status === "Delivered" ? 0 : r.hasPU ? 1 : 2;
+  /* Delivered first, On Water always last (it's the furthest-out status).
+     Everything in between is ordered by Rail ETA — oldest/soonest first —
+     rather than a hand-picked status order, so urgency drives the sort. */
+  const rank = r => r.status === "Delivered" ? 0 : r.status === "On Water" ? 2 : 1;
   const far = new Date(2999, 0, 1);
-  records.sort((a, b) => rank(a) - rank(b) || String(a.status).localeCompare(String(b.status)) || (isDate(a.railEta) ? a.railEta : far) - (isDate(b.railEta) ? b.railEta : far));
+  records.sort((a, b) => rank(a) - rank(b) || (isDate(a.railEta) ? a.railEta : far) - (isDate(b.railEta) ? b.railEta : far) || String(a.status).localeCompare(String(b.status)));
   return {
     found: groupRecs.length > 0 || groups.includes(groupLabel),
     groups,
@@ -2425,15 +2425,7 @@ function WarehouseTab({
     color: RED,
     active: true,
     onClick: () => setSearch("")
-  }) : null)), passed.length ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#fdecec",
-      border: `1.5px solid ${RED}`,
-      borderRadius: 8,
-      padding: "10px 14px",
-      fontSize: 13
-    }
-  }, /*#__PURE__*/React.createElement("b", null, "Passed Rail ETA, not delivered:"), " ", passed.map(r => r.name).join(", ")) : null, /*#__PURE__*/React.createElement("div", {
+  }) : null)), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
@@ -2492,14 +2484,14 @@ function WarehouseTab({
     dark: true,
     onClick: exportWarehouseCSV,
     title: "Download current table as CSV"
-  }), /*#__PURE__*/React.createElement("span", {
+  }), searchResults ? /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "Calibri, 'Segoe UI', sans-serif",
       fontWeight: 400,
       fontSize: 11.5,
       opacity: .8
     }
-  }, searchResults ? "Matches across every warehouse group" : "Yellow highlight: Rail ETA is tomorrow, or PU# assigned but not yet delivered · sorted Delivered → PU# assigned → everything else, oldest Rail ETA first")), /*#__PURE__*/React.createElement("div", {
+  }, "Matches across every warehouse group") : null), /*#__PURE__*/React.createElement("div", {
     style: {
       overflowX: "auto",
       maxHeight: 560,
