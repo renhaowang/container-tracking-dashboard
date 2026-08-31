@@ -563,5 +563,32 @@
       "Hold for exam": 2,
       "Quotation": 12
     }
+  },
+  {
+    "date": "8/31/2026",
+    "dateKey": 20260831,
+    "loadedAt": "2026-08-31T19:18:22.054Z",
+    "total": 371,
+    "delivered": 24,
+    "passedRail": 7,
+    "demurrage": 1,
+    "statusCounts": {
+      "On Water": 116,
+      "A/N": 20,
+      "B/L Release": 1,
+      "Quote": 4,
+      "Delivered": 24,
+      "Arrived at port": 4,
+      "Delivery Schedule": 28,
+      "Booked": 75,
+      "(blank)": 1,
+      "Booking": 65,
+      "RAIL": 3,
+      "Rail Schedule Pending & Discharged": 11,
+      "Attention": 4,
+      "Pending Booking Info & Hold Booking": 1,
+      "Hold for exam": 2,
+      "Quotation": 12
+    }
   }
 ]
