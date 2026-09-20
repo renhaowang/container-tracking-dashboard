@@ -1138,5 +1138,35 @@
       "Pending Telex": 1,
       "Quotation": 12
     }
+  },
+  {
+    "date": "9/20/2026",
+    "dateKey": 20260920,
+    "loadedAt": "2026-09-20T16:38:02.226Z",
+    "total": 341,
+    "delivered": 24,
+    "passedRail": 11,
+    "demurrage": 2,
+    "statusCounts": {
+      "A/N": 40,
+      "Rail": 5,
+      "Booked": 46,
+      "On Water": 171,
+      "B/L Release": 1,
+      "Quote": 4,
+      "Arrived at port": 14,
+      "Delivered": 24,
+      "(blank)": 1,
+      "Attention": 3,
+      "Rail Schedule Pending & Discharged": 3,
+      "RAIL": 1,
+      "Booking": 7,
+      "Delivery Schedule": 2,
+      "Half CTN Booked": 3,
+      "Pending Booking Info & Hold Booking": 1,
+      "Hold for exam": 2,
+      "Pending Telex": 1,
+      "Quotation": 12
+    }
   }
 ]
