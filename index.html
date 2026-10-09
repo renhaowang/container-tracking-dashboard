@@ -910,6 +910,32 @@ async function loadServerHistory() {
     return [];
   }
 }
+/* Latest carrier/rail tracking notes (data/tracking-notes.json) — written by a
+   manual check of each carrier's tracking page, not live. When a container has
+   one, it replaces the generic trucking note in the Warehouse tab's Note column,
+   stamped with the date it was checked so staleness is visible. */
+async function loadTrackingNotes() {
+  try {
+    const res = await fetch("/data/tracking-notes.json", {
+      cache: "no-store"
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data && data.notes || {};
+  } catch (e) {
+    return {};
+  }
+}
+function withTrackingNote(r, notes) {
+  const tn = notes && r.name && notes[r.name];
+  if (!tn || r.status === "Delivered") return r;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(tn.checked || "");
+  const when = m ? ` · checked ${+m[2]}/${+m[3]}` : "";
+  return {
+    ...r,
+    statusTxt: tn.text + when
+  };
+}
 function mergeHistory(local, server) {
   const map = new Map();
   for (const s of local) map.set(s.dateKey, s);
@@ -2464,7 +2490,8 @@ function TrendsTab({
 
 function WarehouseTab({
   nactnRecords,
-  today
+  today,
+  trackingNotes
 }) {
   const allGroups = useMemo(() => nactnRecords ? sortNactnGroups([...new Set(nactnRecords.map(r => r.group))].filter(g => g != null)) : [], [nactnRecords]);
   const [group, setGroup] = useState(DEFAULT_NACTN_GROUP);
@@ -2486,7 +2513,7 @@ function WarehouseTab({
   const report = buildNactnGroupReport(nactnRecords, group, today);
   const todayK = dkey(today),
     tomorrowK = dkey(addDays(today, 1));
-  const recs = report.records;
+  const recs = report.records.map(r => withTrackingNote(r, trackingNotes));
   const tomorrowRows = recs.filter(r => isDate(r.railEta) && dkey(r.railEta) === tomorrowK);
   const passed = recs.filter(r => isDate(r.railEta) && dkey(r.railEta) < todayK && r.status !== "Delivered" && !isDate(r.deliverDate));
   const counts = {};
@@ -2504,7 +2531,7 @@ function WarehouseTab({
   };
   const filteredRecs = special === "delivered" ? recs.filter(r => r.status === "Delivered") : special === "an" ? recs.filter(r => r.status === "A/N") : special === "tomorrow" ? tomorrowRows : special === "passedRail" ? passed : recs;
   const searchQ = search.trim();
-  const searchResults = searchQ ? buildNactnSearchResults(nactnRecords, searchQ, today) : null;
+  const searchResults = searchQ ? buildNactnSearchResults(nactnRecords, searchQ, today).map(r => withTrackingNote(r, trackingNotes)) : null;
   const tableRecs = searchResults || filteredRecs;
   const cols = searchResults ? ["Group", "Container #", "Ship Status", "PU#", "Rail ETA", "LFD", "Deliver Date", "Empty Return LFD", "Note"] : ["Container #", "Ship Status", "PU#", "Rail ETA", "LFD", "Deliver Date", "Empty Return LFD", "Note"];
   const hd = {
@@ -2776,6 +2803,7 @@ function App() {
   const [retrySeconds, setRetrySeconds] = useState(null);
   const [history, setHistory] = useState([]);
   const [serverHistory, setServerHistory] = useState([]);
+  const [trackingNotes, setTrackingNotes] = useState({});
   const today = useMemo(() => {
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), n.getDate());
@@ -2784,6 +2812,7 @@ function App() {
   const refresh = useCallback(async () => {
     setBusy(true);
     setErr(null);
+    loadTrackingNotes().then(setTrackingNotes);
     try {
       const payload = await loadLive();
       if (payload.error) {
@@ -2972,7 +3001,8 @@ function App() {
     today: today
   }) : tab === "warehouse" ? /*#__PURE__*/React.createElement(WarehouseTab, {
     nactnRecords: data.nactnRecords,
-    today: today
+    today: today,
+    trackingNotes: trackingNotes
   }) : /*#__PURE__*/React.createElement(DuplicatesTab, {
     data: data
   })));

@@ -1,0 +1,21 @@
+{
+  "updatedAt": "2026-10-09",
+  "notes": {
+    "MEDU7240900": { "text": "MSC: on rail, left Long Beach 10/6 · est. arrive Dallas ramp (BNSF) 10/10", "checked": "2026-10-09" },
+    "MSDU7145270": { "text": "MSC: discharged Long Beach 10/3, not yet loaded on rail", "checked": "2026-10-09" },
+    "UETU6027839": { "text": "MSC: discharged Long Beach 10/3, not yet loaded on rail", "checked": "2026-10-09" },
+    "MSMU6620387": { "text": "MSC: left Long Beach 10/6, at BNSF Hobart (LA) ramp, no rail departure yet", "checked": "2026-10-09" },
+    "FCIU9981089": { "text": "Evergreen: on UP rail, left LA 10/5, departed Big Spring TX 10/9 9:15am", "checked": "2026-10-09" },
+    "DRYU9572036": { "text": "Evergreen: on UP rail, left LA 10/5, departed Big Spring TX 10/9 9:15am", "checked": "2026-10-09" },
+    "EGHU9183142": { "text": "Evergreen: on UP rail, left LA 10/5, departed Big Spring TX 10/9 9:15am", "checked": "2026-10-09" },
+    "EMCU1633016": { "text": "Evergreen: on UP rail, left LA 10/5, departed Big Spring TX 10/9 9:15am", "checked": "2026-10-09" },
+    "EGSU9668656": { "text": "Evergreen: on UP rail, left LA 10/5, departed Big Spring TX 10/9 9:15am", "checked": "2026-10-09" },
+    "TIIU6243419": { "text": "Evergreen: discharged at LA 10/6, no rail movement yet", "checked": "2026-10-09" },
+    "EGSU1116990": { "text": "Evergreen: discharged at LA 10/6, no rail movement yet", "checked": "2026-10-09" },
+    "EGSU1243104": { "text": "Evergreen: still at sea, vessel EVER MACH est. arrival 10/15", "checked": "2026-10-09" },
+    "TEMU7583116": { "text": "COSCO: last event 9/21 loaded at Ningbo (transshipment), nothing newer", "checked": "2026-10-09" },
+    "SEGU6653104": { "text": "COSCO: last event 9/21 loaded at Ningbo (transshipment), nothing newer", "checked": "2026-10-09" },
+    "CSNU7375626": { "text": "COSCO: last event 9/21 loaded at Ningbo (transshipment), nothing newer", "checked": "2026-10-09" },
+    "BEAU4503891": { "text": "Yang Ming: on UP rail, arrived Dallas Intermodal Terminal 10/9 4:38am", "checked": "2026-10-09" }
+  }
+}
