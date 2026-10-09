@@ -818,6 +818,35 @@ async function loadLive() {
   };
 }
 
+/* Warehouse-only refresh: asks the proxy for just the North American CTN board
+   (about half the time of pulling all five). */
+async function loadNactnOnly() {
+  let res;
+  try {
+    res = await fetch("/api/monday-data?board=NACTN");
+  } catch (e) {
+    return {
+      error: "Could not reach the live data endpoint: " + (e && e.message ? e.message : String(e))
+    };
+  }
+  if (!res.ok) {
+    let msg = "Warehouse refresh failed (HTTP " + res.status + ")";
+    try {
+      const j = await res.json();
+      if (j && j.error) msg = j.error;
+    } catch (e) {}
+    return {
+      error: msg
+    };
+  }
+  const j = await res.json();
+  return j.NACTN ? {
+    records: j.NACTN.records
+  } : {
+    error: "North American CTN board did not come back."
+  };
+}
+
 /* ---------------- persistence (survives closing the dashboard) ---------------- */
 const STORE_KEY = "ctn_dashboard_v1";
 const HISTORY_KEY = "ctn_dashboard_history_v1";
@@ -930,10 +959,12 @@ function withTrackingNote(r, notes) {
   const tn = notes && r.name && notes[r.name];
   if (!tn || r.status === "Delivered") return r;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(tn.checked || "");
-  const when = m ? ` · checked ${+m[2]}/${+m[3]}` : "";
+  /* Note text is "<event> <place> <date/time>" — the date of the carrier's own
+     latest event, so staleness is visible. When it was looked up is hover-only. */
   return {
     ...r,
-    statusTxt: tn.text + when
+    statusTxt: tn.text,
+    noteTitle: m ? `Carrier tracking, looked up ${+m[2]}/${+m[3]}` : "Carrier tracking"
   };
 }
 function mergeHistory(local, server) {
@@ -2491,7 +2522,11 @@ function TrendsTab({
 function WarehouseTab({
   nactnRecords,
   today,
-  trackingNotes
+  trackingNotes,
+  onRefresh,
+  refreshing,
+  refreshedAt,
+  refreshErr
 }) {
   const allGroups = useMemo(() => nactnRecords ? sortNactnGroups([...new Set(nactnRecords.map(r => r.group))].filter(g => g != null)) : [], [nactnRecords]);
   const [group, setGroup] = useState(DEFAULT_NACTN_GROUP);
@@ -2622,7 +2657,36 @@ function WarehouseTab({
     color: RED,
     active: true,
     onClick: () => setSearch("")
-  }) : null)), /*#__PURE__*/React.createElement("div", {
+  }) : null, /*#__PURE__*/React.createElement("button", {
+    onClick: onRefresh,
+    disabled: refreshing,
+    title: "Re-pull just the North American CTN board and the latest tracking notes",
+    style: {
+      background: AMBER,
+      color: NAVY,
+      fontWeight: 700,
+      border: "none",
+      borderRadius: 7,
+      padding: "7px 14px",
+      cursor: refreshing ? "default" : "pointer",
+      fontSize: 13,
+      fontFamily: "Calibri, 'Segoe UI', sans-serif",
+      opacity: refreshing ? 0.7 : 1
+    }
+  }, refreshing ? "Refreshing…" : "↻ Refresh Warehouse"), refreshErr ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: RED
+    }
+  }, refreshErr) : refreshedAt ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: MUT
+    }
+  }, "Updated ", refreshedAt.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit"
+  })) : null)), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
@@ -2779,7 +2843,8 @@ function WarehouseTab({
     }, fmtD(r.emptyReturnLfd)), /*#__PURE__*/React.createElement("td", {
       style: {
         ...bd
-      }
+      },
+      title: r.noteTitle || undefined
     }, r.statusTxt));
   }), tableRecs.length === 0 ? /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
     colSpan: cols.length,
@@ -2804,6 +2869,9 @@ function App() {
   const [history, setHistory] = useState([]);
   const [serverHistory, setServerHistory] = useState([]);
   const [trackingNotes, setTrackingNotes] = useState({});
+  const [whBusy, setWhBusy] = useState(false);
+  const [whAt, setWhAt] = useState(null);
+  const [whErr, setWhErr] = useState(null);
   const today = useMemo(() => {
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), n.getDate());
@@ -2835,6 +2903,24 @@ function App() {
     }
     setBusy(false);
   }, [today]);
+
+  /* Warehouse tab's own refresh — only the North American CTN board plus the
+     tracking-notes file, leaving the other four boards and the rest of the
+     dashboard as they were. */
+  const refreshWarehouse = useCallback(async () => {
+    setWhBusy(true);
+    setWhErr(null);
+    loadTrackingNotes().then(setTrackingNotes);
+    const r = await loadNactnOnly();
+    if (r.error) setWhErr(r.error);else {
+      setData(prev => prev ? {
+        ...prev,
+        nactnRecords: r.records
+      } : prev);
+      setWhAt(new Date());
+    }
+    setWhBusy(false);
+  }, []);
 
   /* Auto-retry when Monday.com's complexity budget hint tells us exactly
      when it'll reset, instead of leaving the user stuck on a dead-end error. */
@@ -3002,7 +3088,11 @@ function App() {
   }) : tab === "warehouse" ? /*#__PURE__*/React.createElement(WarehouseTab, {
     nactnRecords: data.nactnRecords,
     today: today,
-    trackingNotes: trackingNotes
+    trackingNotes: trackingNotes,
+    onRefresh: refreshWarehouse,
+    refreshing: whBusy,
+    refreshedAt: whAt,
+    refreshErr: whErr
   }) : /*#__PURE__*/React.createElement(DuplicatesTab, {
     data: data
   })));

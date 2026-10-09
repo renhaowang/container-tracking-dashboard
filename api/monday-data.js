@@ -152,7 +152,7 @@ async function fetchBoard(token, board) {
    close together — reuse one fetch instead of each re-querying Monday,
    which is the main lever against tripping the complexity budget. */
 const CACHE_TTL_MS = 60 * 1000;
-let cache = null; /* { at, out } */
+const caches = {}; /* cacheKey -> { at, out } — all boards, or a single board via ?board=ID */
 
 module.exports = async (req, res) => {
   const token = process.env.MONDAY_API_TOKEN;
@@ -162,6 +162,13 @@ module.exports = async (req, res) => {
     return;
   }
 
+  /* ?board=NACTN fetches just that board — lets the Warehouse tab refresh on
+     its own (~17s) instead of re-pulling all five boards (~33s). */
+  const only = req.query && typeof req.query.board === "string" && BOARDS[req.query.board] ? req.query.board : null;
+  const boardKeys = only ? [only] : Object.keys(BOARDS);
+  const cacheKey = boardKeys.join(",");
+  const cache = caches[cacheKey];
+
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Data-Cache", "hit");
@@ -169,7 +176,6 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const boardKeys = Object.keys(BOARDS);
   const results = await Promise.allSettled(
     boardKeys.map(key => fetchBoard(token, BOARDS[key]))
   );
@@ -200,6 +206,6 @@ module.exports = async (req, res) => {
     return;
   }
 
-  cache = { at: Date.now(), out };
+  caches[cacheKey] = { at: Date.now(), out };
   res.status(200).json(out);
 };
