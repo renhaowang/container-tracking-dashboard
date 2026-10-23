@@ -2087,5 +2087,34 @@
       "Custom Hold": 2,
       "Quotation": 12
     }
+  },
+  {
+    "date": "10/23/2026",
+    "dateKey": 20261023,
+    "loadedAt": "2026-10-23T17:35:59.481Z",
+    "total": 484,
+    "delivered": 37,
+    "passedRail": 8,
+    "demurrage": 0,
+    "statusCounts": {
+      "Delivered": 39,
+      "Delivery Scheduled": 1,
+      "On Water": 172,
+      "Booked": 122,
+      "B/L Release": 1,
+      "Quote": 4,
+      "Delivery Schedule": 18,
+      "A/N": 55,
+      "Arrived at port": 9,
+      "(blank)": 1,
+      "RAIL": 5,
+      "Rail Schedule Pending & Discharged": 23,
+      "Booking": 16,
+      "Telex Released": 1,
+      "Pending Delivery Schedule": 2,
+      "Pending Booking Info & Hold Booking": 1,
+      "Custom Hold": 2,
+      "Quotation": 12
+    }
   }
 ]
