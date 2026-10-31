@@ -2315,5 +2315,34 @@
       "Pending Booking Info & Hold Booking": 1,
       "Quotation": 12
     }
+  },
+  {
+    "date": "10/31/2026",
+    "dateKey": 20261031,
+    "loadedAt": "2026-10-31T17:26:18.532Z",
+    "total": 520,
+    "delivered": 50,
+    "passedRail": 10,
+    "demurrage": 0,
+    "statusCounts": {
+      "A/N": 31,
+      "On Water": 191,
+      "Booked": 91,
+      "Request Booking": 1,
+      "B/L Release": 1,
+      "Quote": 4,
+      "Booking": 55,
+      "Delivered": 50,
+      "Arrived at port": 26,
+      "(blank)": 1,
+      "RAIL": 17,
+      "Rail Schedule Pending & Discharged": 11,
+      "Delivery Schedule": 24,
+      "Telex Released": 1,
+      "Cancel Booking": 1,
+      "Pending Delivery Schedule": 2,
+      "Pending Booking Info & Hold Booking": 1,
+      "Quotation": 12
+    }
   }
 ]
